@@ -94,6 +94,8 @@ P2OSNode::P2OSNode( ros::NodeHandle nh ) :
   // max_yawdecel
   n_private.param( "max_yawdecel", spd, 0.0);
   motor_max_rot_decel = (short)rint(RTOD(spd));
+  
+  n_private.param( "tf_prefix", ros_tf_prefix, std::string(""));
 
   desired_freq = 10;
 
@@ -694,7 +696,10 @@ int P2OSNode::Shutdown()
 void P2OSNode::StandardSIPPutData(ros::Time ts)
 {
   // put position data
-  p2os_data.position.header.stamp = ts;
+  p2os_data.position.header.stamp    = ts;
+  p2os_data.position.header.frame_id = ros_tf_prefix + "/odom";
+  p2os_data.position.child_frame_id  = ros_tf_prefix + "/base_link";
+  
   pose_pub_.publish( p2os_data.position );
   p2os_data.odom_trans.header.stamp = ts;
   odom_broadcaster.sendTransform( p2os_data.odom_trans );

@@ -171,6 +171,8 @@ class P2OSNode
     double lastPulseTime; // Last time of sending a pulse or command to the robot
     bool use_sonar_;
 
+    std::string ros_tf_prefix;
+    
     P2OSPtz ptz_;
 };
 

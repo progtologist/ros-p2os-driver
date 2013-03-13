@@ -62,10 +62,6 @@ void SIP::FillStandard(ros_p2os_data_t* data)
     pa = DTOR(angle);
   }
 
-  // timestamps get set in the p2os::StandardSIPPutData fcn
-  data->position.header.frame_id = "odom";
-  data->position.child_frame_id = "base_link";
-
   data->position.pose.pose.position.x = px;
   data->position.pose.pose.position.y = py;
   data->position.pose.pose.position.z = 0.0;
