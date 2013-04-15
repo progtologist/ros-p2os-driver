@@ -35,6 +35,8 @@
 #include "ros/ros.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/Twist.h"
+#include <sensor_msgs/JointState.h>
+#include <std_srvs/Empty.h>
 #include <sensor_msgs/Range.h>
 #include <tf/transform_broadcaster.h>
 #include <p2os_driver/BatteryState.h>
@@ -81,6 +83,8 @@ class P2OSNode
     geometry_msgs::Twist      cmdvel_;
     p2os_driver::MotorState   cmdmotor_state_;
     p2os_driver::GripperState gripper_state_;
+    sensor_msgs::JointState   arm_state_;
+    sensor_msgs::JointState   arm_cmd_;
     ros_p2os_data_t           p2os_data;
     
     int Setup();
@@ -121,6 +125,14 @@ class P2OSNode
     void check_voltage( diagnostic_updater::DiagnosticStatusWrapper &stat );
     void check_stall( diagnostic_updater::DiagnosticStatusWrapper &stat );
 
+    void arm_initialize();
+    void publish_arm_state(ros::Time ts);
+    void check_and_set_arm_state();
+    void arm_cmd_callback(const sensor_msgs::JointState::ConstPtr& msg);
+    bool arm_home_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+    bool arm_stop_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+
+
   protected:
     ros::NodeHandle n;
     ros::NodeHandle nh_private;
@@ -134,13 +146,18 @@ class P2OSNode
                 ptz_state_pub_, 
                 sonar_pub_, 
                 aio_pub_, 
-                dio_pub_;
+                dio_pub_,
+                arm_state_pub_;
                 
     ros::Subscriber cmdvel_sub_, 
                 cmdmstate_sub_, 
                 gripper_sub_, 
                 sonar_sub_, 
-                ptz_cmd_sub_;
+                ptz_cmd_sub_,
+                arm_cmd_sub_;
+
+    ros::ServiceServer arm_home_srv_,
+                arm_stop_srv_;
 
     tf::TransformBroadcaster odom_broadcaster;
     ros::Time veltime;
@@ -153,6 +170,7 @@ class P2OSNode
     int         psos_tcp_port;
     bool        vel_dirty, motor_dirty;
     bool        gripper_dirty_;
+    bool        arm_dirty_;
     int         param_idx;
     // PID settings
     int rot_kp, rot_kv, rot_ki, trans_kp, trans_kv, trans_ki;
@@ -170,6 +188,8 @@ class P2OSNode
     double desired_freq;
     double lastPulseTime; // Last time of sending a pulse or command to the robot
     bool use_sonar_;
+    bool use_arm_;
+    bool arm_initialized_;
 
     std::string ros_tf_prefix;
     
