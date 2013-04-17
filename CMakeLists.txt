@@ -60,6 +60,7 @@ add_executable(p2os_driver  src/p2osnode.cc
                             src/sip.cc 
                             src/p2os_ptz.cpp)
 target_link_libraries(p2os_driver ${catkin_LIBRARIES})
+add_dependencies(p2os_driver p2os_driver_gencpp)
 
 #############
 ## Install ##
