@@ -950,7 +950,7 @@ void P2OSNode::StandardSIPPutData(ros::Time ts)
       sonar.range = p2os_data.sonar.ranges[i-1];
       
       char frame_id[64];
-      sprintf(frame_id, "Sonar_%d", i);
+      sprintf(frame_id, "/Sonar_%d", i);
       sonar.header.frame_id = ros_tf_prefix + frame_id; 
       sonar_pub_.publish(sonar);
     }
