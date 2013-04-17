@@ -951,7 +951,7 @@ void P2OSNode::StandardSIPPutData(ros::Time ts)
       
       char frame_id[64];
       sprintf(frame_id, "Sonar_%d", i);
-      sonar.header.frame_id = frame_id; 
+      sonar.header.frame_id = ros_tf_prefix + frame_id; 
       sonar_pub_.publish(sonar);
     }
 	}
