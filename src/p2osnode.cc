@@ -33,56 +33,74 @@
 
 int main( int argc, char** argv )
 {
-  ros::init(argc,argv, "p2os");
-  ros::NodeHandle n;
+    ros::init(argc,argv, "p2os");
+    ros::NodeHandle n;
 
-  P2OSNode *p = new P2OSNode(n);
+    P2OSNode *p = new P2OSNode(n);
 
-  if( p->Setup() != 0 )
-  {
-    ROS_ERROR( "Setup of p2os failed." );
-    return -1;
-  }
-
-  p->ResetRawPositions();
-
-  ros::Time lastTime;
-  
-  while( ros::ok() )
-  {
-    p->check_and_set_vel();
-    p->check_and_set_motor_state();
-    p->check_and_set_gripper_state();
-    p->check_and_set_arm_state();
-
-    if( p->get_pulse() > 0 )
+    if (!(p->psos_use_tcp))
     {
-      ros::Time currentTime = ros::Time::now();
-      ros::Duration pulseInterval = currentTime - lastTime;
-      if( pulseInterval.toSec() > p->get_pulse() )
-      {	
-				ROS_DEBUG ("Sending pulse." );
-        p->SendPulse();
-        lastTime = currentTime;
-      }
+        if( p->Setup() != 0 )
+        {
+            ROS_ERROR( "Setup of p2os over serial failed." );
+            return -1;
+        }
+    }
+    else
+    {
+        if( p->SetupTCP() != 0)
+        {
+            ROS_ERROR( "Setup of p2os over tcp failed." );
+            return -1;
+        }
     }
 
-    // Hack fix to get around the fact that if no commands are sent to the
-    // robot via SendReceive, the driver will never read SIP packets and so
-    // never send data back to clients. We need a better way of doing regular
-    // checks of the serial port - peek in sendreceive, maybe? Because if there
-    // is no data waiting this will sit around waiting until one comes
-    p->SendReceive(NULL,true);
-    p->updateDiagnostics();
-    ros::spinOnce();
-  }
+    p->ResetRawPositions();
 
-  if( p->Shutdown() != 0 )
-  {
-    ROS_WARN( "p2os shutdown failed... your robot might be heading for the wall?" );
-  }
+    ros::Time lastTime;
 
-  ROS_INFO( "Quitting... " );
-  return 0;
+    while( ros::ok() )
+    {
+        ROS_INFO("Spinning");
+        p->check_and_set_vel();
+        ROS_INFO("Velocity Set");
+        p->check_and_set_motor_state();
+        ROS_INFO("Motor Set");
+        p->check_and_set_gripper_state();
+        ROS_INFO("Gripper Set");
+        p->check_and_set_arm_state();
+        ROS_INFO("Arm Set");
+
+        if( p->get_pulse() > 0.0 )
+        {
+            ros::Time currentTime = ros::Time::now();
+            ros::Duration pulseInterval = currentTime - lastTime;
+            if( pulseInterval.toSec() > p->get_pulse() )
+            {
+                ROS_INFO ("Sending pulse." );
+                p->SendPulse();
+                lastTime = currentTime;
+            }
+        }
+
+        // Hack fix to get around the fact that if no commands are sent to the
+        // robot via SendReceive, the driver will never read SIP packets and so
+        // never send data back to clients. We need a better way of doing regular
+        // checks of the serial port - peek in sendreceive, maybe? Because if there
+        // is no data waiting this will sit around waiting until one comes
+//        p->SendReceive(NULL,true);
+        p->updateDiagnostics();
+        ros::spinOnce();
+    }
+
+    if( p->Shutdown() != 0 )
+    {
+        ROS_WARN( "p2os shutdown failed... your robot might be heading for the wall?" );
+    }
+
+    delete p;
+
+    ROS_INFO( "Quitting... " );
+    return 0;
 
 }

@@ -88,6 +88,8 @@ class P2OSNode
     ros_p2os_data_t           p2os_data;
     
     int Setup();
+    int SetupTCP();
+    void setFileCloseOnExec(int fd, bool closeOnExec = true);
     int Shutdown();
 
     int SendReceive(P2OSPacket* pkt, bool publish_data = true );
@@ -131,6 +133,7 @@ class P2OSNode
     void arm_cmd_callback(const sensor_msgs::JointState::ConstPtr& msg);
     bool arm_home_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
     bool arm_stop_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+    bool psos_use_tcp;
 
 
   protected:
@@ -166,7 +169,6 @@ class P2OSNode
     std::string psos_serial_port;
     std::string psos_tcp_host;
     int         psos_fd;
-    bool        psos_use_tcp;
     int         psos_tcp_port;
     bool        vel_dirty, motor_dirty;
     bool        gripper_dirty_;
