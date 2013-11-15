@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(p2os_driver)
 
-find_package(catkin REQUIRED COMPONENTS message_generation roscpp geometry_msgs tf std_msgs)
+find_package(catkin REQUIRED COMPONENTS message_generation roscpp geometry_msgs tf std_msgs hardware_interface controller_manager)
 
 #######################################
 ## Declare ROS messages and services ##
@@ -38,7 +38,7 @@ generate_messages(
 catkin_package(
    INCLUDE_DIRS include
 #  LIBRARIES p2os_driver
-   CATKIN_DEPENDS message_runtime roscpp geometry_msgs tf std_msgs
+   CATKIN_DEPENDS message_runtime roscpp geometry_msgs tf std_msgs hardware_interface controller_manager
 #  DEPENDS system_lib
 )
 
@@ -52,13 +52,13 @@ include_directories(include
 )
 
 ## Declare a cpp executable
-add_executable(p2os_driver  src/p2osnode.cc 
-                            src/p2os.cc 
-                            src/kinecalc.cc 
-                            src/packet.cc 
-                            src/robot_params.cc 
-                            src/sip.cc 
-                            src/p2os_ptz.cpp)
+add_executable(p2os_driver  src/p2osnode.cc
+                            src/p2os.cc         include/p2os.h
+                            src/kinecalc.cc     include/kinecalc.h
+                            src/packet.cc       include/packet.h
+                            src/robot_params.cc include/robot_params.h
+                            src/sip.cc          include/sip.h
+                            src/p2os_ptz.cpp    include/p2os_ptz.h)
 target_link_libraries(p2os_driver ${catkin_LIBRARIES})
 add_dependencies(p2os_driver p2os_driver_gencpp)
 

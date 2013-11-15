@@ -1,7 +1,7 @@
 <launch>
 	<!-- run p2os to control the pioneer -->
 	<node pkg="p2os_driver" type="p2os_driver" name="p2os_driver" respawn="true">
-		<rosparam file="$(find p2os_driver)/launch/p2os_driver.yaml" command="load" />
+		<rosparam file="$(find p2os_driver)/config/p2os_driver.yaml" command="load" />
 	</node>
 	
 	<!-- The old 'dashboard' for enabling the robot no longer works, 

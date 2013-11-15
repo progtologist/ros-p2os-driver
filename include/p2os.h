@@ -35,7 +35,6 @@
 #include "ros/ros.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/Twist.h"
-#include <sensor_msgs/JointState.h>
 #include <std_srvs/Empty.h>
 #include <sensor_msgs/Range.h>
 #include <tf/transform_broadcaster.h>
@@ -49,6 +48,14 @@
 
 #include <diagnostic_updater/publisher.h>
 #include <diagnostic_updater/diagnostic_updater.h>
+
+#include <hardware_interface/joint_command_interface.h>
+#include <hardware_interface/joint_state_interface.h>
+#include <hardware_interface/robot_hw.h>
+
+//#include <joint_limits_interface/joint_limits.h>
+//#include <joint_limits_interface/joint_limits_urdf.h>
+//#include <joint_limits_interface/joint_limits_rosparam.h>
 
 typedef struct ros_p2os_data
 {
@@ -74,7 +81,7 @@ class SIP;
 //class KineCalc;
 
 
-class P2OSNode
+class P2OSNode : public hardware_interface::RobotHW
 {
   public:
     P2OSNode( ros::NodeHandle n );
@@ -83,8 +90,6 @@ class P2OSNode
     geometry_msgs::Twist      cmdvel_;
     p2os_driver::MotorState   cmdmotor_state_;
     p2os_driver::GripperState gripper_state_;
-    sensor_msgs::JointState   arm_state_;
-    sensor_msgs::JointState   arm_cmd_;
     ros_p2os_data_t           p2os_data;
     
     int Setup();
@@ -128,12 +133,12 @@ class P2OSNode
     void check_stall( diagnostic_updater::DiagnosticStatusWrapper &stat );
 
     void arm_initialize();
-    void publish_arm_state(ros::Time ts);
-    void check_and_set_arm_state();
-    void arm_cmd_callback(const sensor_msgs::JointState::ConstPtr& msg);
-    bool arm_home_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
-    bool arm_stop_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+    void read_arm_state();
+    void write_arm_state(ros::Time time, ros::Duration period);
     bool psos_use_tcp;
+    bool use_arm_;
+    bool arm_initialized_;
+    double frequency;
 
 
   protected:
@@ -149,21 +154,23 @@ class P2OSNode
                 ptz_state_pub_, 
                 sonar_pub_, 
                 aio_pub_, 
-                dio_pub_,
-                arm_state_pub_;
+                dio_pub_;
                 
     ros::Subscriber cmdvel_sub_, 
                 cmdmstate_sub_, 
                 gripper_sub_, 
                 sonar_sub_, 
-                ptz_cmd_sub_,
-                arm_cmd_sub_;
-
-    ros::ServiceServer arm_home_srv_,
-                arm_stop_srv_;
+                ptz_cmd_sub_;
 
     tf::TransformBroadcaster odom_broadcaster;
     ros::Time veltime;
+
+    hardware_interface::JointStateInterface jnt_state_interface;
+    hardware_interface::PositionJointInterface jnt_pos_interface;
+    std::vector<double> arm_cmd;
+    std::vector<double> arm_pos;
+    std::vector<double> arm_vel;
+    std::vector<double> arm_eff;
 
     SIP* sippacket;
     std::string psos_serial_port;
@@ -172,16 +179,15 @@ class P2OSNode
     int         psos_tcp_port;
     bool        vel_dirty, motor_dirty;
     bool        gripper_dirty_;
-    bool        arm_dirty_;
     int         param_idx;
     // PID settings
     int rot_kp, rot_kv, rot_ki, trans_kp, trans_kv, trans_ki;
 
-    int bumpstall; // should we change the bumper-stall behavior?
+    int bumpstall;
     int joystick;
     int direct_wheel_vel_control;
     int radio_modemp;
-
+    int NumberOfJoints;
     int motor_max_speed;
     int motor_max_turnspeed;
     short motor_max_trans_accel, motor_max_trans_decel;
@@ -190,10 +196,6 @@ class P2OSNode
     double desired_freq;
     double lastPulseTime; // Last time of sending a pulse or command to the robot
     bool use_sonar_;
-    bool use_arm_;
-    bool arm_initialized_;
-
-    std::string ros_tf_prefix;
     
     P2OSPtz ptz_;
 };

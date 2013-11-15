@@ -1,0 +1,59 @@
+#
+# P2OS ROS Driver Node
+#
+
+# Standard Robot Settings
+# Default values are
+# use_sonar:                false
+# use_arm:                  false
+# port:                     /dev/ttyS0
+# use_tcp:                  false
+# tcp_remote_host:          localhost
+# tcp_remote_port:          8101
+# radio:                    0
+# joystick:                 0
+# direct_wheel_vel_control: 0
+# frequency:                10 (ROS Rate to keep CPU usage low)
+# pulse:                    5  (Every how many cycles to send a pulse)
+use_sonar:                true
+use_arm:                  false
+port:                     /dev/ttyS0
+use_tcp:                  true
+tcp_remote_host:          localhost
+tcp_remote_port:          8101
+radio:                    0
+joystick:                 0
+direct_wheel_vel_control: 0
+frequency:                10
+pulse:                    5
+
+# If requested, change bumper-stall behavior
+# 0 = don't stall
+# 1 = stall on front bumper contact
+# 2 = stall on rear bumper contact
+# 3 = stall on either bumper contact
+bumpstall:                -1
+
+# Set the Control Parameters
+# (Set to -1 if you want to use the default)
+rot_kp:                  -1 
+rot_kv:                  -1
+rot_ki:                  -1
+trans_kp:                -1
+trans_kv:                -1 
+trans_ki:                -1 
+
+# Set the limits of the Robot
+# Default values are:
+# max_xspeed:               0.5
+# max_yawspeed:            1.74 (100degrees/sec)
+# max_xaccel:               0.0
+# max_xdecel:               0.0
+# max_yaccel:               0.0
+# max_ydecel:               0.0
+max_xspeed:               1.0
+max_yawspeed:             1.72
+max_xaccel:               0.0
+max_xdecel:               0.0
+max_yaccel:               0.0
+max_ydecel:               0.0

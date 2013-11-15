@@ -42,9 +42,9 @@ P2OSNode::P2OSNode( ros::NodeHandle nh ) :
     gripper_dirty_(false),
     batt_pub_( n.advertise<p2os_driver::BatteryState>("battery_state",1000),
                diagnostic_,
-               diagnostic_updater::FrequencyStatusParam( &desired_freq, &desired_freq, 0.1),
+               diagnostic_updater::FrequencyStatusParam( &frequency, &frequency, 0.1),
                diagnostic_updater::TimeStampStatusParam() ),
-    arm_dirty_(false), arm_initialized_(false),
+    arm_initialized_(false),
     ptz_(this)
 {
     // Use sonar
@@ -55,8 +55,10 @@ P2OSNode::P2OSNode( ros::NodeHandle nh ) :
     // read in config options
     // bumpstall
     n_private.param( "bumpstall", bumpstall, -1 );
+    // Communication Frequency
+    n_private.param( "frequency", frequency, 10.0);
     // pulse
-    n_private.param( "pulse", pulse, 0.5 );
+    n_private.param( "pulse", pulse, 5 );
     // rot_kp
     n_private.param( "rot_kp", rot_kp, -1 );
     // rot_kv
@@ -72,7 +74,6 @@ P2OSNode::P2OSNode( ros::NodeHandle nh ) :
     // !!! port !!!
     std::string def = DEFAULT_P2OS_PORT;
     n_private.param( "port", psos_serial_port, def );
-//    ROS_INFO( "using serial port: [%s]", psos_serial_port.c_str() );
     n_private.param( "use_tcp", psos_use_tcp, false );
     std::string host = DEFAULT_P2OS_TCP_REMOTE_HOST;
     n_private.param( "tcp_remote_host", psos_tcp_host, host );
@@ -102,10 +103,6 @@ P2OSNode::P2OSNode( ros::NodeHandle nh ) :
     // max_yawdecel
     n_private.param( "max_yawdecel", spd, 0.0);
     motor_max_rot_decel = (short)rint(RTOD(spd));
-
-    n_private.param( "tf_prefix", ros_tf_prefix, std::string(""));
-
-    desired_freq = 10;
 
     // advertise services
     pose_pub_       = n.advertise<nav_msgs::Odometry>       ("pose"         ,1000);
@@ -310,38 +307,33 @@ void P2OSNode::arm_initialize()
             SendReceive (&packet,false);
 
             // Resize Joint State message to hold the proper number of joints
-            unsigned int joint_count = (unsigned int)sippacket->armNumJoints;
-            arm_state_.name.resize(joint_count);
-            arm_state_.position.resize(joint_count);
-            arm_state_.velocity.resize(joint_count);
-            arm_state_.effort.resize(joint_count);
-            arm_cmd_.name.resize(joint_count);
-            arm_cmd_.position.resize(joint_count);
-            arm_cmd_.velocity.resize(joint_count);
-            arm_cmd_.effort.resize(joint_count);
+            std::vector<hardware_interface::JointStateHandle> state_handler;
+            std::vector<hardware_interface::JointHandle> pos_handler;
+
+            NumberOfJoints = (unsigned int)sippacket->armNumJoints;
+            std::string val;
+
+            arm_cmd.resize(NumberOfJoints);
+            arm_pos.resize(NumberOfJoints);
+            arm_vel.resize(NumberOfJoints);
+            arm_eff.resize(NumberOfJoints);
+            state_handler.resize(NumberOfJoints);
+            pos_handler.resize(NumberOfJoints);
 
             // Set fixed, per-joint information
             std::stringstream ss;
-            for(unsigned int i = 0; i < joint_count; ++i)
+            for(unsigned int i = 0; i < NumberOfJoints; ++i)
             {
-                ss.str("");
                 ss << i;
-
-                arm_state_.name[i] = "Joint" + ss.str();
-                arm_cmd_.name[i] = "Joint" + ss.str();
+                val = "Joint" + ss.str();
+                state_handler[i] = hardware_interface::JointStateHandle(val, &arm_pos[i], &arm_vel[i], &arm_eff[i]);
+                jnt_state_interface.registerHandle(state_handler[i]);
+                pos_handler[i] = hardware_interface::JointHandle(jnt_state_interface.getHandle(val), &arm_cmd[i]);
+                jnt_pos_interface.registerHandle(pos_handler[i]);
             }
 
-            // subscribe to arm commands
-            arm_cmd_sub_ = n.subscribe("command", 1, &P2OSNode::arm_cmd_callback, this);
-
-            // advertise arm state
-            arm_state_pub_ = n.advertise<sensor_msgs::JointState>("joint_states", 1);
-
-            // advertise arm services
-            arm_home_srv_ = n.advertiseService("home", &P2OSNode::arm_home_callback, this);
-
-            // advertise arm services
-            arm_stop_srv_ = n.advertiseService("stop", &P2OSNode::arm_stop_callback, this);
+            registerInterface(&jnt_state_interface);
+            registerInterface(&jnt_pos_interface);
 
             // Mark as initialized
             arm_initialized_ = true;
@@ -349,51 +341,35 @@ void P2OSNode::arm_initialize()
     }
 }
 
-void P2OSNode::publish_arm_state(ros::Time ts)
+void P2OSNode::read_arm_state()
 {
-    if(arm_initialized_)
+
+    // Update SIP positions.
+    for (int ii = 0; ii < 6; ii++)
     {
-        // The JointState message should be properly sized already
-        assert(arm_state_.name.size() == sippacket->armNumJoints);
-        assert(arm_state_.position.size() == sippacket->armNumJoints);
-        assert(arm_state_.velocity.size() == sippacket->armNumJoints);
-        assert(arm_state_.effort.size() == sippacket->armNumJoints);
+        sippacket->armJointPosRads[ii] = TicksToRadians (ii, sippacket->armJointPos[ii]);
+    }
 
-        // Update SIP positions. (Don't know why, simply keeping with the PLAYER driver)
-        for (int ii = 0; ii < 6; ii++)
+    // Fill in the joint positions. No other information is available
+    for (int i = 0; i < sippacket->armNumJoints; i++)
+    {
+        arm_pos[i] = TicksToRadians(i, sippacket->armJointPos[i]);
+        // Slightly fake the velocity information. If the joint is moving, assume its moving at the configured velocity
+        if(sippacket->armJointMoving[i])
         {
-            sippacket->armJointPosRads[ii] = TicksToRadians (ii, sippacket->armJointPos[ii]);
+            arm_vel[i] = SecsPerTicktoRadsPerSec(i, sippacket->armJoints[i].speed);
         }
-
-        // Fill in header timestamp
-        arm_state_.header.stamp = ts;
-
-        // Fill in the joint positions. No other information is available
-        for (int i = 0; i < sippacket->armNumJoints; i++)
+        else
         {
-            arm_state_.position[i] = TicksToRadians(i, sippacket->armJointPos[i]);
-            // Slightly fake the velocity information. If the joint is moving, assume its moving at the configured velocity
-            if(sippacket->armJointMoving[i])
-            {
-                arm_state_.velocity[i] = SecsPerTicktoRadsPerSec(i, sippacket->armJoints[i].speed);
-            }
-            else
-            {
-                arm_state_.velocity[i] = 0.0;
-            }
-            // No "effort" information is available. PLAYER P2OS driver set effort to -1, and so will I
-            arm_state_.effort[i] = -1;
+            arm_vel[i] = 0.0;
         }
-
-        // Publish
-        arm_state_pub_.publish(arm_state_);
+        // No "effort" information is available. PLAYER P2OS driver set effort to -1, and so will I
+        arm_eff[i] = -1;
     }
 }
 
-void P2OSNode::check_and_set_arm_state()
+void P2OSNode::write_arm_state(ros::Time time, ros::Duration period)
 {
-    if( !arm_dirty_ ) return;
-
     unsigned char command[4];
     P2OSPacket packet;
 
@@ -401,20 +377,20 @@ void P2OSNode::check_and_set_arm_state()
     for(unsigned char i = 0; i < sippacket->armNumJoints; ++i)
     {
         // Calculate joint settings
-        char speed = RadsPerSectoSecsPerTick(i, arm_cmd_.velocity[i]);
-        unsigned char position = RadiansToTicks(i, arm_cmd_.position[i]);
+        unsigned char position = RadiansToTicks(i, arm_cmd[i]);
 
-        // Set the Joint Speed, if different
-        if((arm_cmd_.velocity[i] > 0) && (speed != sippacket->armJoints[i].speed))
-        {
-            command[0] = ARM_SPEED;
-            command[1] = ARGINT;
-            command[2] = speed;
-            command[3] = i + 1;
-            packet.Build(command, 4);
-            SendReceive(&packet);
-            sippacket->armJoints[i].speed = speed;
-        }
+//        POSSIBILITY FOR VELOCITY CONTROL MUST BE CHECKED!
+//        char speed = RadsPerSectoSecsPerTick(i, arm_cmd_.velocity[i]);
+//        if((arm_cmd_.velocity[i] > 0) && (speed != sippacket->armJoints[i].speed))
+//        {
+//            command[0] = ARM_SPEED;
+//            command[1] = ARGINT;
+//            command[2] = speed;
+//            command[3] = i + 1;
+//            packet.Build(command, 4);
+//            SendReceive(&packet);
+//            sippacket->armJoints[i].speed = speed;
+//        }
 
         if(position != sippacket->armJointTargetPos[i])
         {
@@ -427,70 +403,6 @@ void P2OSNode::check_and_set_arm_state()
             sippacket->armJointTargetPos[i] = position;
         }
     }
-
-    arm_dirty_ = false;
-}
-
-void P2OSNode::arm_cmd_callback(const sensor_msgs::JointState::ConstPtr& msg)
-{
-    if(arm_initialized_)
-    {
-
-        // Map between the JointState command message joint indices and the class joint indices
-        // The internal command information will be updated with information from any matching joints
-        for(unsigned int i = 0; i < this->arm_cmd_.name.size(); ++i)
-        {
-            for(unsigned int j = 0; j < msg->name.size(); ++j)
-            {
-                if(this->arm_cmd_.name[i] == msg->name[j])
-                {
-                    this->arm_cmd_.position[i] = msg->position[j];
-                    this->arm_cmd_.velocity[i] = msg->velocity[j];
-                    this->arm_cmd_.effort[i] = msg->effort[j];
-                    this->arm_cmd_.header = msg->header;
-                    this->arm_dirty_ = true;
-                    break;
-                }
-            }
-        }
-
-    }
-}
-
-bool P2OSNode::arm_home_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
-{
-    if(arm_initialized_)
-    {
-        // Send all joints home
-        unsigned char command[4];
-        P2OSPacket packet;
-        command[0] = ARM_HOME;
-        command[1] = ARGINT;
-        command[2] = (unsigned char)255;
-        command[3] = 0;
-        packet.Build(command, 4);
-        SendReceive(&packet);
-    }
-
-    return true;
-}
-
-bool P2OSNode::arm_stop_callback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
-{
-    if(arm_initialized_)
-    {
-        // Send all joints home
-        unsigned char command[4];
-        P2OSPacket packet;
-        command[0] = ARM_STOP;
-        command[1] = ARGINT;
-        command[2] = (unsigned char)255;
-        command[3] = 0;
-        packet.Build(command, 4);
-        SendReceive(&packet);
-    }
-
-    return true;
 }
 
 void P2OSNode::sonar_cb(const p2os_driver::SonarStateConstPtr &msg)
@@ -887,6 +799,8 @@ int P2OSNode::Setup()
         SendReceive (&packet,false);
         ROS_DEBUG("Arm Interface enabled. Requesting ARMINFOPAC.");
     }
+
+    ROS_INFO("Completed Serial Setup");
     return(0);
 }
 
@@ -903,7 +817,6 @@ void P2OSNode::setFileCloseOnExec(int fd, bool closeOnExec)
         return;
       }
 
-      ROS_INFO("Flags %d",flags);
       if (closeOnExec)
         flags |= FD_CLOEXEC;
       else
@@ -963,8 +876,8 @@ void P2OSNode::StandardSIPPutData(ros::Time ts)
 {
     // put position data
     p2os_data.position.header.stamp    = ts;
-    p2os_data.position.header.frame_id = ros_tf_prefix + "/odom";
-    p2os_data.position.child_frame_id  = ros_tf_prefix + "/base_link";
+    p2os_data.position.header.frame_id = "/odom";
+    p2os_data.position.child_frame_id  = "/base_link";
 
     pose_pub_.publish( p2os_data.position );
     p2os_data.odom_trans.header.stamp = ts;
@@ -993,7 +906,7 @@ void P2OSNode::StandardSIPPutData(ros::Time ts)
 
             char frame_id[64];
             sprintf(frame_id, "/Sonar_%d", i);
-            sonar.header.frame_id = ros_tf_prefix + frame_id;
+            sonar.header.frame_id = frame_id;
             sonar_pub_.publish(sonar);
         }
     }
@@ -1069,7 +982,7 @@ int P2OSNode::SendReceive(P2OSPacket* pkt, bool publish_data)
 
             if(publish_data)
             {
-                publish_arm_state(packet.timestamp);
+                read_arm_state();
             }
         }
         else if(packet.packet[0] == 0xFA && packet.packet[1] == 0xFB && packet.packet[3] == ARMINFOPAC)
@@ -1274,6 +1187,8 @@ int P2OSNode::SetupTCP()
         READY
     } psos_state;
 
+    psos_state = NO_SYNC;
+
     // Empty servaddr
     bzero(&servaddr, sizeof(servaddr));
 
@@ -1341,7 +1256,7 @@ int P2OSNode::SetupTCP()
             ROS_INFO("turning off NONBLOCK mode...");
             if(fcntl(this->psos_fd, F_SETFL, flags ^ O_NONBLOCK) < 0)
             {
-                ROS_ERROR("P2OS::Setup():fcntl()");
+                ROS_ERROR("P2OS::SetupTCP():fcntl()");
                 close(this->psos_fd);
                 this->psos_fd = -1;
                 return(1);
@@ -1356,7 +1271,7 @@ int P2OSNode::SetupTCP()
             packet.Send(this->psos_fd);
             break;
         default:
-            ROS_WARN("P2OS::Setup() shouldn't be here...");
+            ROS_WARN("P2OS::SetupTCP() shouldn't be here...");
             break;
         }
         usleep(P2OS_CYCLETIME_USEC);
@@ -1418,7 +1333,6 @@ int P2OSNode::SetupTCP()
         return(1);
     }
 
-    ROS_INFO("Connected to psos_fd");
     cnt = 4;
     cnt += snprintf(name, sizeof(name), "%s", &receivedpacket.packet[cnt]);
     cnt++;
@@ -1429,8 +1343,6 @@ int P2OSNode::SetupTCP()
 
     std::string hwID = std::string( name ) + std::string(": ") + std::string(type) + std::string("/") + std::string( subtype );
     diagnostic_.setHardwareID(hwID);
-
-    ROS_INFO("hwID: %s", hwID.c_str());
 
     command = OPEN;
     packet.Build(&command, 1);
@@ -1457,10 +1369,6 @@ int P2OSNode::SetupTCP()
     {
         ROS_WARN("P2OS: Warning: couldn't find parameters for this robot, using defaults");
         param_idx = 0;
-    }
-    else
-    {
-        ROS_INFO("Found robot type %s, subtype %s", PlayerRobotParams[param_idx].Class.c_str(), PlayerRobotParams[param_idx].Subclass.c_str());
     }
 
     if(!sippacket)
@@ -1593,8 +1501,6 @@ int P2OSNode::SetupTCP()
             this->SendReceive(&bumpstall_packet,false);
         }
     }
-    ROS_INFO("Robot Limits and PID Settings set!");
-
     // Turn on the sonar
     if(use_sonar_)
     {

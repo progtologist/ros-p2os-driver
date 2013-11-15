@@ -23,10 +23,11 @@
 
 #include <iostream>
 
-#include "ros/ros.h"
-#include "tf/transform_datatypes.h"
-#include "geometry_msgs/Pose.h"
-#include "geometry_msgs/PoseStamped.h"
+#include <ros/ros.h>
+#include <tf/transform_datatypes.h>
+#include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <controller_manager/controller_manager.h>
 
 #include <p2os.h>
 #include <p2os_driver/MotorState.h>
@@ -37,6 +38,7 @@ int main( int argc, char** argv )
     ros::NodeHandle n;
 
     P2OSNode *p = new P2OSNode(n);
+    controller_manager::ControllerManager cm(p);
 
     if (!(p->psos_use_tcp))
     {
@@ -57,40 +59,35 @@ int main( int argc, char** argv )
 
     p->ResetRawPositions();
 
-    ros::Time lastTime;
+    ros::Rate rate(p->frequency);
+    int pulseCounter = 0;
+    ros::Time time;
 
     while( ros::ok() )
     {
-        ROS_INFO("Spinning");
         p->check_and_set_vel();
-        ROS_INFO("Velocity Set");
         p->check_and_set_motor_state();
-        ROS_INFO("Motor Set");
         p->check_and_set_gripper_state();
-        ROS_INFO("Gripper Set");
-        p->check_and_set_arm_state();
-        ROS_INFO("Arm Set");
-
-        if( p->get_pulse() > 0.0 )
+        if (p->use_arm_)
         {
-            ros::Time currentTime = ros::Time::now();
-            ros::Duration pulseInterval = currentTime - lastTime;
-            if( pulseInterval.toSec() > p->get_pulse() )
+            if (p->arm_initialized_)
             {
-                ROS_INFO ("Sending pulse." );
-                p->SendPulse();
-                lastTime = currentTime;
+                p->read_arm_state();
+                time = ros::Time::now();
+                cm.update(time,rate.cycleTime());
+                p->write_arm_state(time,rate.cycleTime());
             }
         }
 
-        // Hack fix to get around the fact that if no commands are sent to the
-        // robot via SendReceive, the driver will never read SIP packets and so
-        // never send data back to clients. We need a better way of doing regular
-        // checks of the serial port - peek in sendreceive, maybe? Because if there
-        // is no data waiting this will sit around waiting until one comes
-//        p->SendReceive(NULL,true);
+        pulseCounter++;
+        if ( pulseCounter > p->get_pulse())
+        {
+            p->SendPulse();
+            pulseCounter = 0;
+        }
         p->updateDiagnostics();
         ros::spinOnce();
+        rate.sleep();
     }
 
     if( p->Shutdown() != 0 )
@@ -102,5 +99,4 @@ int main( int argc, char** argv )
 
     ROS_INFO( "Quitting... " );
     return 0;
-
 }
