@@ -405,14 +405,13 @@ void P2OSNode::write_arm_state(ros::Time time, ros::Duration period)
     }
 }
 
-void P2OSNode::check_and_set_arm_state()
+void P2OSNode::check_and_set_arm_state(ros::Time time, ros::Duration period)
 {
     if (p->arm_initialized_)
     {
         p->read_arm_state();
-        time = ros::Time::now();
-        cm.update(time,rate.cycleTime());
-        p->write_arm_state(time,rate.cycleTime());
+        cm.update(time,period);
+        p->write_arm_state(time,period);
     }
 }
 
