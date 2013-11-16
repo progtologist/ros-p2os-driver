@@ -27,7 +27,6 @@
 #include <tf/transform_datatypes.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <controller_manager/controller_manager.h>
 
 #include <p2os.h>
 #include <p2os_driver/MotorState.h>
@@ -40,7 +39,7 @@ int main( int argc, char** argv )
     P2OSNode *p = new P2OSNode(n);
     controller_manager::ControllerManager cm(p);
 
-    if (!(p->psos_use_tcp))
+    if (!(p->get_psos_use_tcp()))
     {
         if( p->Setup() != 0 )
         {
@@ -59,7 +58,7 @@ int main( int argc, char** argv )
 
     p->ResetRawPositions();
 
-    ros::Rate rate(p->frequency);
+    ros::Rate rate(p->get_frequency());
     int pulseCounter = 0;
     ros::Time time;
 
