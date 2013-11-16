@@ -58,7 +58,7 @@ P2OSNode::P2OSNode( ros::NodeHandle nh ) :
     // Communication Frequency
     n_private.param( "frequency", frequency, 10.0);
     // pulse
-    n_private.param( "pulse", pulse, 5 );
+    n_private.param( "pulse", pulse, 5.0 );
     // rot_kp
     n_private.param( "rot_kp", rot_kp, -1 );
     // rot_kv
@@ -405,13 +405,13 @@ void P2OSNode::write_arm_state(ros::Time time, ros::Duration period)
     }
 }
 
-void P2OSNode::check_and_set_arm_state(ros::Time time, ros::Duration period)
+void P2OSNode::check_and_set_arm_state(ros::Time time, ros::Duration period, controller_manager::ControllerManager &cm)
 {
-    if (p->arm_initialized_)
+    if (arm_initialized_)
     {
-        p->read_arm_state();
+        read_arm_state();
         cm.update(time,period);
-        p->write_arm_state(time,period);
+        write_arm_state(time,period);
     }
 }
 

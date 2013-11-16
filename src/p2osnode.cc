@@ -66,7 +66,7 @@ int main( int argc, char** argv )
         p->check_and_set_vel();
         p->check_and_set_motor_state();
         p->check_and_set_gripper_state();
-        p->check_and_set_arm_state(ros::Time::now(),rate.cycleTime());
+        p->check_and_set_arm_state(ros::Time::now(),rate.cycleTime(),cm);
 
         pulseCounter++;
         if ( pulseCounter > p->get_pulse())
@@ -75,7 +75,7 @@ int main( int argc, char** argv )
             pulseCounter = 0;
         }
         // Listen at a constant rate
-        p->sendReceive(NULL,true);
+        p->SendReceive(NULL,true);
         p->updateDiagnostics();
         ros::spinOnce();
         rate.sleep();
