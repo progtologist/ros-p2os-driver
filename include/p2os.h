@@ -127,7 +127,7 @@ class P2OSNode : public hardware_interface::RobotHW
 
     void sonar_cb(const p2os_driver::SonarStateConstPtr &msg);
     
-    void check_and_set_arm_state();
+    void check_and_set_arm_state(ros::Time time, ros::Duration period);
 
     double get_pulse() {return pulse;}
     bool get_psos_use_tcp() {return psos_use_tcp;}
