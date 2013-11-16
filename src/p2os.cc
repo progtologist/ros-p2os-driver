@@ -1518,16 +1518,11 @@ int P2OSNode::SetupTCP()
         this->ToggleSonarPower(1);
         ROS_DEBUG("Sonar array powered on.");
     }
-//    ptz_.setup();
-    if(use_arm_)
+    ptz_.setup();
+    if (use_arm_)
     {
-        // Request ArmInfo Packet to verify the arm exists/get arm properties
-        P2OSPacket packet;
-        unsigned char command[4];
-        command[0] = ARM_INFO;
-        packet.Build (command, 1);
-        SendReceive (&packet,false);
-        ROS_DEBUG("Arm Interface enabled. Requesting ARMINFOPAC.");
+        ROS_WARN("Arm is not supported in TCP mode");
+        use_arm_=false;
     }
     ROS_INFO("Completed TCP Setup");
     return(0);
