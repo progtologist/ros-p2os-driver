@@ -60,14 +60,13 @@ int main( int argc, char** argv )
 
     ros::Rate rate(p->get_frequency());
     int pulseCounter = 0;
-    ros::Time time;
 
     while( ros::ok() )
     {
         p->check_and_set_vel();
         p->check_and_set_motor_state();
         p->check_and_set_gripper_state();
-        p->check_and_set_arm_state();
+        p->check_and_set_arm_state(ros::Time::now(),rate.cycleTime());
 
         pulseCounter++;
         if ( pulseCounter > p->get_pulse())
