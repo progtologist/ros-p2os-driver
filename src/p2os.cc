@@ -405,6 +405,17 @@ void P2OSNode::write_arm_state(ros::Time time, ros::Duration period)
     }
 }
 
+void P2OSNode::check_and_set_arm_state()
+{
+    if (p->arm_initialized_)
+    {
+        p->read_arm_state();
+        time = ros::Time::now();
+        cm.update(time,rate.cycleTime());
+        p->write_arm_state(time,rate.cycleTime());
+    }
+}
+
 void P2OSNode::sonar_cb(const p2os_driver::SonarStateConstPtr &msg)
 {
     if(use_sonar_ == msg->array_power) return;
