@@ -52,6 +52,7 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/joint_state_interface.h>
 #include <hardware_interface/robot_hw.h>
+#include <controller_manager/controller_manager.h>
 
 //#include <joint_limits_interface/joint_limits.h>
 //#include <joint_limits_interface/joint_limits_urdf.h>
@@ -125,25 +126,32 @@ class P2OSNode : public hardware_interface::RobotHW
     void gripperCallback(const p2os_driver::GripperStateConstPtr &msg);
 
     void sonar_cb(const p2os_driver::SonarStateConstPtr &msg);
+    
+    void check_and_set_arm_state();
 
     double get_pulse() {return pulse;}
+    bool get_psos_use_tcp() {return psos_use_tcp;}
+    double get_frequency() {return frequency;}
 
     // diagnostic messages
     void check_voltage( diagnostic_updater::DiagnosticStatusWrapper &stat );
     void check_stall( diagnostic_updater::DiagnosticStatusWrapper &stat );
 
+
+
+
+
+  protected:
+  
     void arm_initialize();
     void read_arm_state();
+    ros::NodeHandle n;
+    ros::NodeHandle nh_private;
     void write_arm_state(ros::Time time, ros::Duration period);
     bool psos_use_tcp;
     bool use_arm_;
     bool arm_initialized_;
     double frequency;
-
-
-  protected:
-    ros::NodeHandle n;
-    ros::NodeHandle nh_private;
 
     diagnostic_updater::Updater diagnostic_;
     diagnostic_updater::DiagnosedPublisher<p2os_driver::BatteryState> batt_pub_;
